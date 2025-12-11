@@ -188,6 +188,12 @@ Config.IPLSetup = {
         -- Optional: camera position for security UI / camera system later
         cameraCoords = vec3(1710.290161, 4728.527344, 42.136230),
 
+        confiscateCoords = {
+            x = 1044.20,
+            y = -3192.85,
+            z = -39.14,
+        },
+
         -- Not used for meth because we use bob74_ipl directly,
         -- but keeping it for parity with other types if needed later.
         interiorConfig = nil
@@ -206,6 +212,12 @@ Config.IPLSetup = {
 
         -- Optional: camera position for security UI / camera system later
         cameraCoords = vec3(716.72, -654.70, 27.78),
+
+        confiscateCoords = {
+            x = 1092.45,
+            y = -3195.50,
+            z = -38.99,
+        },
 
         -- Not used for meth because we use bob74_ipl directly,
         -- but keeping it for parity with other types if needed later.
@@ -226,6 +238,12 @@ Config.IPLSetup = {
         -- Optional: camera position for security UI / camera system later
         cameraCoords = vec3(-55.00, 6392.57, 31.62),
 
+        confiscateCoords = {
+            x = 1130.97,
+            y = -3198.34,
+            z = -39.50,
+        },
+
         -- Not used for meth because we use bob74_ipl directly,
         -- but keeping it for parity with other types if needed later.
         interiorConfig = nil
@@ -244,6 +262,12 @@ Config.IPLSetup = {
 
         -- Optional: camera position for security UI / camera system later
         cameraCoords = vec3(-252.72, -2591.06, 6.00),
+
+        confiscateCoords = {
+            x = 1164.35,
+            y = -3193.32,
+            z = -39.01,
+        },
 
         -- Not used for meth because we use bob74_ipl directly,
         -- but keeping it for parity with other types if needed later.
