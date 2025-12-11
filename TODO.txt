@@ -1,0 +1,19 @@
+- Unexpected events, machinery failure, other (do supply run / minigame to fix the machinery | unexpected events may cause: production stop, explosion, police alert
+
+- Make upgrade buttons, text and full container responsive - live update✔️
+
+- AI Security system✔️
+
+- CCTV Camera system✔️
+
+- Steal / buy supplies button and container responsive. i dont get a feeling that i got a task and gps marker✔️
+
+- Player keys system full implemention✔️
+
+- Worker employees to each lab / facility✔️
+
+- Steal supplies missions (we could do a seperate missions.lua):
+
+- Hack minigame to enter some warehouse / IPL (cops get alerted at this time) -> supply van inside the warehouse, to unlock the van, 
+another minigame will be triggered to open the door. Once 	hacked, player can just drive the vehicle out and to the desired marker 
+(each facility exterior ill have its own)
