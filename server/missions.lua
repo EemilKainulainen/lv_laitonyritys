@@ -1,7 +1,7 @@
 -- server/missions.lua
 
 ---------------------------------------------------------------------
--- Resupply missions
+-- Resupply missions (Warehouse Heist)
 ---------------------------------------------------------------------
 
 lib.callback.register('lv_laitonyritys:startResupply', function(source, businessId, missionType)
@@ -24,6 +24,11 @@ lib.callback.register('lv_laitonyritys:startResupply', function(source, business
         return false
     end
 
+    local data = Businesses[businessId]
+    if not data or not data.owner_identifier then
+        return false
+    end
+
     local token = Utils.RandomToken()
     ResupplyMissions[token] = {
         src         = src,
@@ -32,26 +37,15 @@ lib.callback.register('lv_laitonyritys:startResupply', function(source, business
         startedAt   = os.time()
     }
 
-    local missionCfg = Config.ResupplyMissions and Config.ResupplyMissions[missionType] or nil
-
     local missionInfo = {
-        missionType = missionType,
-        description = missionCfg and missionCfg.description or 'Acquire supplies for your business.'
+        missionType   = missionType,
+        businessLabel = loc.label,
+        description   = ('Steal supplies for %s.'):format(loc.label or 'your business')
     }
-
-    if missionCfg and missionCfg.coords then
-        missionInfo.label = missionCfg.label or 'Resupply Site'
-        missionInfo.target = {
-            x = missionCfg.coords.x,
-            y = missionCfg.coords.y,
-            z = missionCfg.coords.z,
-            w = missionCfg.coords.w
-        }
-    end
 
     discordLog(
         'Resupply Started',
-        ('Player %s started resupply for %s (%s)')
+        ('Player %s started resupply (warehouse heist) for %s (%s)')
             :format(GetPlayerName(src), businessId, missionType)
     )
 
@@ -78,6 +72,7 @@ RegisterNetEvent('lv_laitonyritys:server:completeResupply', function(token)
         return
     end
 
+    -- Keep the same scaling as before (1/2/3 missionType) unless you change it later
     local addSupplies = 40
     if mission.missionType == 2 then
         addSupplies = 60
@@ -93,14 +88,51 @@ RegisterNetEvent('lv_laitonyritys:server:completeResupply', function(token)
     data.supplies = newSupplies
     saveBusiness(businessId)
 
-    discordLog('Resupply Completed', ('Player %s completed resupply for %s, +%d supplies.')
+    discordLog('Resupply Completed', ('Player %s completed resupply for %s, +%d supplies (warehouse heist).')
         :format(GetPlayerName(src), loc.label, addSupplies))
 
     ResupplyMissions[token] = nil
 end)
 
+-- Cops alerted when the FIRST fingerprint hack starts at the warehouse door
+RegisterNetEvent('lv_laitonyritys:server:alertPoliceSupplyHeist', function(businessId)
+    local src = source
+    local cfg = Config.SupplyHeist or {}
+    local coords = cfg.WarehouseEnter or vec3(909.24, -2097.41, 30.55)
+
+    if Config.Dispatch and Config.Dispatch.Enabled and Config.Dispatch.UseTkDispatch then
+        local success, err = pcall(function()
+            exports.tk_dispatch:addCall({
+                title = Config.Dispatch.Title or 'Suspicious activity at illegal business',
+                code = Config.Dispatch.Code or '10-90',
+                priority = Config.Dispatch.Priority or 'high',
+                message = 'Possible warehouse hacking in progress.',
+                coords = coords,
+                jobs = Config.Dispatch.Jobs or { 'police' },
+                blip = {
+                    sprite = Config.Dispatch.Blip.sprite or 431,
+                    scale  = Config.Dispatch.Blip.scale  or 1.0,
+                    color  = Config.Dispatch.Blip.color  or 1,
+                    radius = Config.Dispatch.Blip.radius or 150.0
+                },
+                playSound = true,
+                flash = true
+            })
+        end)
+
+        if not success then
+            print('[lv_laitonyritys] tk-dispatch error (supply heist): ' .. tostring(err))
+        end
+    end
+
+    local loc = Config.Locations[businessId]
+    discordLog('Supply Theft Started',
+        ('Player %s started a warehouse hack for %s (%s)')
+        :format(GetPlayerName(src) or ('ID ' .. src), loc and loc.label or 'Unknown', businessId or 'unknown'))
+end)
+
 ---------------------------------------------------------------------
--- Sell missions
+-- Sell missions (unchanged)
 ---------------------------------------------------------------------
 
 lib.callback.register('lv_laitonyritys:startSell', function(source, businessId, missionType)
@@ -211,7 +243,7 @@ RegisterNetEvent('lv_laitonyritys:server:completeSell', function(token)
 end)
 
 ---------------------------------------------------------------------
--- Setup mission
+-- Setup mission (unchanged)
 ---------------------------------------------------------------------
 
 lib.callback.register('lv_laitonyritys:startSetup', function(source, businessId)
@@ -307,7 +339,7 @@ RegisterNetEvent('lv_laitonyritys:server:completeSetup', function(businessId)
 end)
 
 ---------------------------------------------------------------------
--- Business stash
+-- Business stash (unchanged)
 ---------------------------------------------------------------------
 
 RegisterNetEvent('lv_laitonyritys:server:openStash', function(businessId)

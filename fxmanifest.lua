@@ -29,7 +29,8 @@ client_scripts {
     'client/main.lua',
     'client/npc.lua',
     'client/production_props.lua',
-    'client/employees.lua'
+    'client/employees.lua',
+    'client/ui_missions.lua'
 }
 
 ui_page 'html/index.html'

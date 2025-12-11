@@ -36,6 +36,38 @@ Config.Minigames = {
     }
 }
 
+-- Warehouse steal-supplies mission config
+Config.SupplyHeist = {
+    -- Exterior door you walk up to and start the fingerprint hack
+    WarehouseEnter = vec3(909.24, -2097.41, 30.55),
+
+    -- Interior position (ChopShopCartelGarage IPL)
+    WarehouseInterior = vec3(1220.133, -2277.844, -50.000),
+
+    -- Interior exit (if you want to add a manual exit later)
+    WarehouseExit = vec3(1205.89, -2268.45, -47.33),
+
+    -- Van spawn inside the warehouse
+    VanSpawn = vec4(1222.77, -2286.19, -49.00, 359.17),
+
+    -- Model used for the supply van
+    VanModel = `gburrito2`,
+
+    -- First fingerprint (warehouse door)
+    DoorHack = {
+        levels = 1,  -- 1–4
+        lifes  = 3,  -- 1–6
+        time   = 2,  -- minutes
+    },
+
+    -- Second fingerprint (van doors)
+    VanHack = {
+        levels = 1,
+        lifes  = 3,
+        time   = 1,
+    },
+}
+
 -- Discord Logging
 Config.Discord = {
     Enabled = true,
@@ -71,8 +103,6 @@ Config.Dispatch = {
         radius = 150.0
     }
 }
-
-
 
 -- Production settings (base values; upgraded by equipment/employees)
 Config.Production = {
@@ -310,6 +340,8 @@ Config.Locations = {
 
         -- Setup truck alignment area (inside meth interior)
         setupDelivery = vec4(1421.657104, 3616.852783, 34.924561, 22.677164),
+
+        vanCoords = vec3(1422.31, 3615.35, 34.94),
 
         price = 200000,
         area  = 'Algonquin Boulevard',
