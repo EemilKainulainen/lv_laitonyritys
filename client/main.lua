@@ -21,9 +21,6 @@ local ActiveSales = {}
 local SECURITY_PED_MODEL   = `mp_g_m_pros_01`
 local REL_GROUP_SECURITY   = nil
 local SecurityPeds         = {}
-local ActiveRaidStates     = {}
-local RaidEntryUnlocked    = {}
-local currentRaidOfficer   = false
 
 local function angleDiff(a, b)
     local d = (a - b) % 360.0
@@ -118,54 +115,6 @@ local function getCameraCoordsForBusiness(businessId)
     end
 
     return nil
-end
-
-local function getConfiscateCoordsForBusiness(businessId)
-    local loc = Config.Locations[businessId]
-    if not loc then return nil end
-
-    local ipl = Config.IPLSetup and Config.IPLSetup[loc.type]
-    if ipl and ipl.confiscateCoords then
-        return ipl.confiscateCoords
-    end
-
-    return nil
-end
-
-local function getCurrentUnixTime()
-    local cloud = GetCloudTimeAsInt()
-    if cloud and cloud > 0 then
-        return cloud
-    end
-
-    return math.floor(GetGameTimer() / 1000)
-end
-
-local function getActiveRaidState(businessId)
-    local raid = ActiveRaidStates[businessId]
-    if not raid then return nil end
-
-    if raid.expiresAt and raid.expiresAt <= getCurrentUnixTime() then
-    if raid.expiresAt and raid.expiresAt <= os.time() then
-        ActiveRaidStates[businessId] = nil
-        RaidEntryUnlocked[businessId] = nil
-        return nil
-    end
-
-    return raid
-end
-
-local function areSecurityNeutralized(businessId)
-    local guards = SecurityPeds[businessId]
-    if not guards or #guards == 0 then return true end
-
-    for _, ped in ipairs(guards) do
-        if DoesEntityExist(ped) and not IsEntityDead(ped) and not IsPedFatallyInjured(ped) then
-            return false
-        end
-    end
-
-    return true
 end
 
 local function spawnSecurityForBusiness(businessId, data)
@@ -944,62 +893,6 @@ local function refreshFacilityHud(businessId)
     end, businessId)
 end
 
-local function attemptRaidEntry(businessId)
-    local raid = getActiveRaidState(businessId)
-    if not raid or not raid.breached then return false end
-
-    local allowed = lib.callback.await('lv_laitonyritys:canEnterRaid', false, businessId)
-    if not allowed then
-        lib.notify({ title = 'Police Raid', description = 'Raid access unavailable.', type = 'error' })
-        return false
-    end
-
-    return true
-end
-
-local function attemptRaidLockpick(businessId, data)
-    local allowed, reason = lib.callback.await('lv_laitonyritys:canPoliceRaid', false, businessId)
-    if not allowed then
-        lib.notify({
-            title = data.label or 'Raid',
-            description = reason or 'You cannot raid this lab right now.',
-            type = 'error'
-        })
-        return false
-    end
-
-    lib.showTextUI('Lockpicking Door...')
-
-    local ok, success = pcall(function()
-        return exports['lockpick']:startLockpick()
-    end)
-
-    lib.hideTextUI()
-
-    if not ok or not success then
-        lib.notify({
-            title = 'Police Raid',
-            description = 'Lockpick failed.',
-            type = 'error'
-        })
-        return false
-    end
-
-    ActiveRaidStates[businessId] = ActiveRaidStates[businessId] or {}
-    ActiveRaidStates[businessId].breached = true
-    RaidEntryUnlocked[businessId] = true
-
-    TriggerServerEvent('lv_laitonyritys:server:markRaidBreached', businessId)
-
-    lib.notify({
-        title = 'Police Raid',
-        description = 'Door unlocked. Enter the lab!',
-        type = 'success'
-    })
-
-    return true
-end
-
 local function applyBusinessUiUpdateFromData(updated)
     if not updated then return end
 
@@ -1057,13 +950,7 @@ local function setupEntranceForLocation(id, data)
 
             if nearEntrance then
                 sleep = 0
-                local raidState = getActiveRaidState(id)
                 local label = ('[E] Enter %s'):format(data.label)
-
-                if raidState and not (raidState.breached or RaidEntryUnlocked[id]) then
-                    label = '[E] Lockpick Door'
-                end
-
                 if not showing or lastLabel ~= label then
                     lib.showTextUI(label)
                     showing   = true
@@ -1078,63 +965,47 @@ local function setupEntranceForLocation(id, data)
                     local businessId   = id
                     local businessType = data.type  -- e.g. 'meth'
 
-                    local raid = getActiveRaidState(id)
-                    if raid and not (raid.breached or RaidEntryUnlocked[id]) then
-                        attemptRaidLockpick(id, data)
-                    else
-                        -- Check ownership / keys BEFORE entry (unless authorized raid)
-                        lib.callback('lv_laitonyritys:getBusinessData', false, function(bizData)
-                            if not bizData then
-                                lib.notify({
-                                    title       = data.label or 'Business',
-                                    description = 'Failed to load business data.',
-                                    type        = 'error'
-                                })
-                                return
-                            end
+                    -- Check ownership / keys BEFORE entry
+                    lib.callback('lv_laitonyritys:getBusinessData', false, function(bizData)
+                        if not bizData then
+                            lib.notify({
+                                title       = data.label or 'Business',
+                                description = 'Failed to load business data.',
+                                type        = 'error'
+                            })
+                            return
+                        end
 
-                            local enteringRaid = false
-                            local refreshedRaid = getActiveRaidState(businessId)
+                        -- must own OR have keys (associate)
+                        if not bizData.owned or not bizData.canAccess then
+                            lib.notify({
+                                title       = bizData.locationLabel or data.label or 'Business',
+                                description = 'You must own this facility or have keys to enter.',
+                                type        = 'error'
+                            })
+                            return
+                        end
 
-                            if refreshedRaid and (refreshedRaid.breached or RaidEntryUnlocked[businessId]) then
-                                enteringRaid = attemptRaidEntry(businessId)
-                            end
+                        -- put player into their private business instance
+                        TriggerServerEvent('lv_laitonyritys:server:setInsideBusiness', businessId, true)
 
-                            -- must own OR have keys (associate) unless entering via raid
-                            if not enteringRaid and (not bizData.owned or not bizData.canAccess) then
-                                lib.notify({
-                                    title       = bizData.locationLabel or data.label or 'Business',
-                                    description = 'You must own this facility or have keys to enter.',
-                                    type        = 'error'
-                                })
-                                return
-                            end
+                        -- door transition
+                        local faceHeading = entrance.w or GetEntityHeading(PlayerPedId())
+                        playDoorTransition(interior, faceHeading)
 
-                            -- put player into their private business instance
-                            TriggerServerEvent('lv_laitonyritys:server:setInsideBusiness', businessId, true)
+                        currentBusinessIdInside = businessId
 
-                            -- door transition
-                            local faceHeading = entrance.w or GetEntityHeading(PlayerPedId())
-                            playDoorTransition(interior, faceHeading)
+                        -- spawn employees (only while inside)
+                        TriggerEvent('lv_laitonyritys:client:updateEmployeesForBusiness',
+                            businessId,
+                            bizData.type or businessType,      -- 'meth' etc.
+                            bizData.employeesLevel or 0,
+                            true
+                        )
 
-                            currentBusinessIdInside = businessId
-                            currentRaidOfficer = enteringRaid
-
-                            if not enteringRaid then
-                                -- spawn employees (only while inside)
-                                TriggerEvent('lv_laitonyritys:client:updateEmployeesForBusiness',
-                                    businessId,
-                                    bizData.type or businessType,      -- 'meth' etc.
-                                    bizData.employeesLevel or 0,
-                                    true
-                                )
-
-                                showFirstTimeBusinessAlert(businessId)
-                            end
-
-                            refreshFacilityHud(businessId)
-                        end, businessId)
-                    end
+                        showFirstTimeBusinessAlert(businessId)
+                        refreshFacilityHud(businessId)
+                    end, businessId)
                 end
 
             elseif nearExit then
@@ -1172,7 +1043,6 @@ local function setupEntranceForLocation(id, data)
                     playDoorTransition(entrance, faceHeading)
 
                     currentBusinessIdInside = nil
-                    currentRaidOfficer = false
                     SendNUIMessage({ action = 'hideFacilityHud' })
                     clearSecurityForBusiness(businessId)
 
@@ -1808,19 +1678,6 @@ RegisterNetEvent('lv_laitonyritys:client:raidCamera', function(businessId)
     DestroyCam(cam, false)
 end)
 
-RegisterNetEvent('lv_laitonyritys:client:updateRaidState', function(businessId, state)
-    if state then
-        ActiveRaidStates[businessId] = {
-            breached = state.breached or false,
-            confiscated = state.confiscated or false,
-            expiresAt = state.expiresAt
-        }
-    else
-        ActiveRaidStates[businessId] = nil
-        RaidEntryUnlocked[businessId] = nil
-    end
-end)
-
 RegisterNetEvent('lv_laitonyritys:client:openBusinessBrowser', function()
     lib.callback('lv_laitonyritys:getBusinessBrowserData', false, function(payload)
         if not payload then
@@ -2107,89 +1964,6 @@ RegisterNetEvent('lv_laitonyritys:client:onRaidStart', function(businessId)
 
             TaskCombatHatedTargetsAroundPed(ped, 50.0)
         end
-    end
-end)
-
-CreateThread(function()
-    local showing = false
-
-    while true do
-        Wait(500)
-
-        local businessId = currentBusinessIdInside
-        if not businessId or not currentRaidOfficer then
-            if showing then
-                lib.hideTextUI()
-                showing = false
-            end
-            goto continue
-        end
-
-        local raid = getActiveRaidState(businessId)
-        if not raid or not raid.breached or raid.confiscated then
-            if showing then
-                lib.hideTextUI()
-                showing = false
-            end
-            goto continue
-        end
-
-        if not areSecurityNeutralized(businessId) then
-            if showing then
-                lib.hideTextUI()
-                showing = false
-            end
-            goto continue
-        end
-
-        local coords = getConfiscateCoordsForBusiness(businessId)
-        if not coords then
-            goto continue
-        end
-
-        local ped = PlayerPedId()
-        local pos = GetEntityCoords(ped)
-        local target = vec3(coords.x, coords.y, coords.z)
-
-        if #(pos - target) < 2.0 then
-            if not showing then
-                lib.showTextUI('[E] Confiscate Lab Output')
-                showing = true
-            end
-
-            if IsControlJustReleased(0, 38) then
-                lib.hideTextUI()
-                showing = false
-
-                local success = lib.progressCircle({
-                    duration = 8000,
-                    label = 'Confiscating production...',
-                    position = 'bottom',
-                    useWhileDead = false,
-                    canCancel = true,
-                    disable = {
-                        move = true,
-                        car = true,
-                        combat = true
-                    }
-                })
-
-                if success then
-                    TriggerServerEvent('lv_laitonyritys:server:confiscateLab', businessId)
-                else
-                    lib.notify({
-                        title = 'Police Raid',
-                        description = 'Confiscation cancelled.',
-                        type = 'error'
-                    })
-                end
-            end
-        elseif showing then
-            lib.hideTextUI()
-            showing = false
-        end
-
-        ::continue::
     end
 end)
 
