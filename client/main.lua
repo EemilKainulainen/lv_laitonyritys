@@ -146,6 +146,7 @@ local function getActiveRaidState(businessId)
     if not raid then return nil end
 
     if raid.expiresAt and raid.expiresAt <= getCurrentUnixTime() then
+    if raid.expiresAt and raid.expiresAt <= os.time() then
         ActiveRaidStates[businessId] = nil
         RaidEntryUnlocked[businessId] = nil
         return nil
