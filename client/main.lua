@@ -132,10 +132,20 @@ local function getConfiscateCoordsForBusiness(businessId)
     return nil
 end
 
+local function getCurrentUnixTime()
+    local cloud = GetCloudTimeAsInt()
+    if cloud and cloud > 0 then
+        return cloud
+    end
+
+    return math.floor(GetGameTimer() / 1000)
+end
+
 local function getActiveRaidState(businessId)
     local raid = ActiveRaidStates[businessId]
     if not raid then return nil end
 
+    if raid.expiresAt and raid.expiresAt <= getCurrentUnixTime() then
     if raid.expiresAt and raid.expiresAt <= os.time() then
         ActiveRaidStates[businessId] = nil
         RaidEntryUnlocked[businessId] = nil
